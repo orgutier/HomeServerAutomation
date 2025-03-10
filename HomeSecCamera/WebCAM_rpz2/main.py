@@ -26,12 +26,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html_content.encode("utf-8"))
 
-# Set up the server
-Handler = CustomHandler
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print(f"Serving website at http://{get_ip()}:8000")
-    httpd.serve_forever()
-
 # Function to get the Pi's IP address
 def get_ip():
     import socket
@@ -40,3 +34,9 @@ def get_ip():
     ip = s.getsockname()[0]
     s.close()
     return ip
+
+# Set up the server
+Handler = CustomHandler
+with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    print(f"Serving website at http://{get_ip()}:8000")
+    httpd.serve_forever()
