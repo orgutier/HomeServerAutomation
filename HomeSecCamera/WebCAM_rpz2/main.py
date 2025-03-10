@@ -1,3 +1,9 @@
+## sudo raspi-config
+## Interface -> Camera -> Enable
+
+## sudo apt update
+## sudo apt install python3-picamera2 python3-opencv
+
 import http.server
 import socketserver
 
