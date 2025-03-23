@@ -1,94 +1,46 @@
-from flask import Flask, Response, request, abort, jsonify
-import os
-from functools import wraps
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, Response
 from picamera2 import Picamera2
-from cryptography.fernet import Fernet
-import io
+import time
 
 app = Flask(__name__)
 
-# Configuration
-TEMP_IMAGE_PATH = "/tmp/camera_image.jpg"  # Only used as fallback
-SECRET_KEY = "your-secret-key-here"
-USERNAME = "admin"
-PASSWORD_HASH = generate_password_hash("your-strong-password")
-# Encryption key (generate once and share with client securely)
-ENCRYPTION_KEY = Fernet.generate_key()  # Run once, then hardcode the key
-cipher = Fernet(ENCRYPTION_KEY)
-
-# Initialize camera with lower resolution for speed
+# Initialize the camera
 camera = Picamera2()
-camera_config = camera.create_still_configuration(main={"size": (640, 480)})
+camera_config = camera.create_video_configuration(main={"size": (640, 480)})  # Lower res for speed
 camera.configure(camera_config)
 camera.start()
 
-# Basic authentication decorator
-def require_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or auth.username != USERNAME or not check_password_hash(PASSWORD_HASH, auth.password):
-            abort(401, "Authentication required")
-        return f(*args, **kwargs)
-    return decorated
+def generate_frames():
+    while True:
+        # Capture frame as JPEG
+        frame = camera.capture_array()
+        # Convert to JPEG bytes
+        _, buffer = camera.capture_buffer("jpeg")
+        # Yield frame in MJPEG format
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer + b'\r\n')
+        time.sleep(0.1)  # Adjust delay for frame rate (10 FPS here)
 
-# Function to capture image directly to memory
-def capture_image():
-    try:
-        output = io.BytesIO()
-        camera.capture_file(output, format='jpeg')
-        output.seek(0)
-        return output.read()
-    except Exception as e:
-        print(f"Error capturing image: {str(e)}")
-        return None
+@app.route('/')
+def index():
+    # Simple HTML page to display the video stream
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Raspberry Pi Infrared Camera Stream</title></head>
+    <body>
+        <h1>Infrared Camera Stream</h1>
+        <img src="/video_feed" width="640" height="480">
+    </body>
+    </html>
+    """
 
-# Root route for clarity
-@app.route('/', methods=['GET'])
-def root():
-    return jsonify({
-        "message": "Welcome to the Raspberry Pi Camera Server",
-        "endpoints": {
-            "/get-image": "GET - Retrieve encrypted camera image (requires auth)",
-            "/health": "GET - Check server status"
-        }
-    }), 200
-
-# API endpoint to serve encrypted image
-@app.route('/get-image', methods=['GET'])
-@require_auth
-def serve_image():
-    try:
-        image_data = capture_image()
-        if image_data is None:
-            abort(500, "Failed to capture image from camera")
-        
-        encrypted_data = cipher.encrypt(image_data)
-        
-        return Response(
-            encrypted_data,
-            mimetype='application/octet-stream',
-            headers={'X-Encrypted': 'true'}
-        )
-    except Exception as e:
-        abort(500, f"Server error: {str(e)}")
-
-# Health check endpoint
-@app.route('/health', methods=['GET'])
-def health_check():
-    return {"status": "ok"}, 200
+@app.route('/video_feed')
+def video_feed():
+    # Stream the MJPEG video
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
-    # Print encryption key on first run (save it for client)
-    print("Encryption Key:", ENCRYPTION_KEY.decode())
-    
-    try:
-        app.run(
-            host='0.0.0.0',
-            port=5000,
-            threaded=True,
-            debug=False  # Set to True for more detailed logs if needed
-        )
-    finally:
-        camera.stop()
+    # Run the server on all interfaces, port 5000
+    app.run(host='0.0.0.0', port=5000, threaded=True)
