@@ -15,9 +15,9 @@ def generate_frames():
     """Generate JPEG frames as fast as possible using hardware encoding."""
     stream = io.BytesIO()
     while True:
-        # Capture directly to JPEG in memory
+        # Capture directly to JPEG in memory (hardware-accelerated)
         stream.seek(0)
-        camera.capture_file(stream, format='jpeg', quality=40)  # Hardware-accelerated JPEG
+        camera.capture_file(stream, format='jpeg')  # Default hardware JPEG encoding
         jpeg_data = stream.getvalue()
         print(f"Frame size: {len(jpeg_data)} bytes")  # Debug
         yield (b'--frame\r\n'
