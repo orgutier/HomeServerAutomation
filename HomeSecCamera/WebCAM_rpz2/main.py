@@ -1,6 +1,7 @@
 from flask import Flask, Response
 from picamera2 import Picamera2
 import time
+import io
 
 app = Flask(__name__)
 
@@ -12,14 +13,20 @@ camera.start()
 
 def generate_frames():
     while True:
-        # Capture frame as JPEG
+        # Capture frame as a numpy array (raw data)
         frame = camera.capture_array()
-        # Convert to JPEG bytes
-        _, buffer = camera.capture_buffer("jpeg")
+        
+        # Convert to JPEG in memory
+        buffer = io.BytesIO()
+        camera.capture_file(buffer, format='jpeg')  # Use capture_file to encode to JPEG
+        buffer.seek(0)
+        jpeg_data = buffer.getvalue()
+        
         # Yield frame in MJPEG format
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer + b'\r\n')
-        time.sleep(0.1)  # Adjust delay for frame rate (10 FPS here)
+               b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data + b'\r\n')
+        
+        time.sleep(0.1)  # 10 FPS, adjust as needed
 
 @app.route('/')
 def index():
@@ -42,5 +49,7 @@ def video_feed():
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 if __name__ == '__main__':
-    # Run the server on all interfaces, port 5000
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    try:
+        app.run(host='0.0.0.0', port=5000, threaded=True)
+    finally:
+        camera.stop()  # Ensure camera stops when script exits
