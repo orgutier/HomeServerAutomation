@@ -36,6 +36,7 @@ def generate_frames():
     while True:
         frame = camera.capture_array()
         jpeg_data = process_frame(frame, current_mode)
+        print(f"Generated frame of {len(jpeg_data)} bytes")  # Debug output
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data + b'\r\n')
         time.sleep(0.1)  # 10 FPS
@@ -44,37 +45,14 @@ def generate_frames():
 def index():
     return """
     <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Raspberry Pi Infrared Camera Stream</title>
-        <style>
-            button { padding: 10px 20px; font-size: 16px; margin: 10px; }
-        </style>
-    </head>
-    <body>
-        <h1>Infrared Camera Stream</h1>
-        <img src="/video_feed" width="640" height="480" id="feed">
-        <br>
-        <button onclick="toggleMode()">Toggle Normal/Infrared</button>
-        <p>Current Mode: <span id="mode">Infrared</span></p>
-        <script>
-            let isInfrared = true;
-            function toggleMode() {
-                isInfrared = !isInfrared;
-                fetch('/set_mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: isInfrared ? 'infrared' : 'normal' })
-                });
-                document.getElementById('mode').textContent = isInfrared ? 'Infrared' : 'Normal';
-            }
-        </script>
-    </body>
+    <html><head><title>Raspberry Pi Infrared Camera Stream</title></head>
+    <body><h1>Infrared Camera Stream</h1><img src="/video_feed" width="640" height="480"></body>
     </html>
     """
 
 @app.route('/video_feed')
 def video_feed():
+    print("Client connected to /video_feed")  # Debug output
     return Response(generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -84,7 +62,7 @@ def set_mode():
     data = request.get_json()
     if data and 'mode' in data:
         current_mode = data['mode']
-    return '', 204  # No content response
+    return '', 204
 
 if __name__ == '__main__':
     try:
