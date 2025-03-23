@@ -1,4 +1,4 @@
-from flask import Flask, Response
+from flask import Flask, Response, request  # Added 'request' import
 from picamera2 import Picamera2
 import time
 import io
@@ -13,23 +13,20 @@ camera_config = camera.create_video_configuration(main={"size": (640, 480)})
 camera.configure(camera_config)
 camera.start()
 
-# Global variable to track mode (controlled by client)
+# Global variable to track mode
 current_mode = "infrared"  # Default to infrared
 
 def process_frame(frame, mode):
     """Process the frame based on the mode."""
-    # Convert numpy array to PIL Image
     img = Image.fromarray(frame)
     
     if mode == "normal":
-        # Simulate normal mode: reduce IR influence with basic color adjustment
-        # NoIR cameras show pinkish tint due to IR; this tones it down
+        # Simulate normal mode: reduce IR influence
         img_array = np.array(img)
-        img_array[:,:,0] = np.clip(img_array[:,:,0] * 0.8, 0, 255)  # Reduce red channel
-        img_array[:,:,1] = np.clip(img_array[:,:,1] * 1.1, 0, 255)  # Boost green slightly
+        img_array[:,:,0] = np.clip(img_array[:,:,0] * 0.8, 0, 255)  # Reduce red
+        img_array[:,:,1] = np.clip(img_array[:,:,1] * 1.1, 0, 255)  # Boost green
         img = Image.fromarray(img_array)
     
-    # Convert back to JPEG
     buffer = io.BytesIO()
     img.save(buffer, format='JPEG')
     buffer.seek(0)
@@ -38,21 +35,14 @@ def process_frame(frame, mode):
 def generate_frames():
     global current_mode
     while True:
-        # Capture raw frame
         frame = camera.capture_array()
-        
-        # Process frame based on current mode
         jpeg_data = process_frame(frame, current_mode)
-        
-        # Yield frame in MJPEG format
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data + b'\r\n')
-        
         time.sleep(0.1)  # 10 FPS
 
 @app.route('/')
 def index():
-    # HTML page with toggle button
     return """
     <!DOCTYPE html>
     <html>
