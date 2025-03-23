@@ -87,4 +87,18 @@ def index():
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/set_mode', methods=['POST'])
+def set_mode():
+    global current_mode
+    data = request.get_json()
+    if data and 'mode' in data:
+        current_mode = data['mode']
+    return '', 204  # No content response
+
+if __name__ == '__main__':
+    try:
+        app.run(host='0.0.0.0', port=5000, threaded=True)
+    finally:
+        camera.stop()
