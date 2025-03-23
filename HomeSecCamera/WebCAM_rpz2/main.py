@@ -18,17 +18,14 @@ current_mode = "infrared"  # Default to infrared
 
 def process_frame(frame, mode):
     """Process the frame based on the mode."""
-    # Convert numpy array (RGBA) to PIL Image and then to RGB
     img = Image.fromarray(frame).convert('RGB')
     
     if mode == "normal":
-        # Simulate normal mode: reduce IR influence
         img_array = np.array(img)
         img_array[:,:,0] = np.clip(img_array[:,:,0] * 0.8, 0, 255)  # Reduce red
         img_array[:,:,1] = np.clip(img_array[:,:,1] * 1.1, 0, 255)  # Boost green
         img = Image.fromarray(img_array)
     
-    # Save as JPEG
     buffer = io.BytesIO()
     img.save(buffer, format='JPEG')
     buffer.seek(0)
@@ -91,6 +88,6 @@ def set_mode():
 
 if __name__ == '__main__':
     try:
-        app.run(host='0.0.0.0', port=5000, threaded=True)
+        app.run(host='127.0.0.1', port=5000, threaded=True)
     finally:
         camera.stop()
