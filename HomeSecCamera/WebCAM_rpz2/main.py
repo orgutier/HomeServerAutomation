@@ -1,4 +1,4 @@
-from flask import Flask, Response, request  # Added 'request' import
+from flask import Flask, Response, request
 from picamera2 import Picamera2
 import time
 import io
@@ -18,7 +18,8 @@ current_mode = "infrared"  # Default to infrared
 
 def process_frame(frame, mode):
     """Process the frame based on the mode."""
-    img = Image.fromarray(frame)
+    # Convert numpy array (RGBA) to PIL Image and then to RGB
+    img = Image.fromarray(frame).convert('RGB')
     
     if mode == "normal":
         # Simulate normal mode: reduce IR influence
@@ -27,6 +28,7 @@ def process_frame(frame, mode):
         img_array[:,:,1] = np.clip(img_array[:,:,1] * 1.1, 0, 255)  # Boost green
         img = Image.fromarray(img_array)
     
+    # Save as JPEG
     buffer = io.BytesIO()
     img.save(buffer, format='JPEG')
     buffer.seek(0)
