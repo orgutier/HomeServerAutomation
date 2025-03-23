@@ -1,4 +1,4 @@
-from flask import Flask, Response, request, abort, jsonify
+from flask import Flask, Response, request, abort, jsonify, send_from_directory
 import os
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,15 +9,13 @@ import io
 app = Flask(__name__)
 
 # Configuration
-TEMP_IMAGE_PATH = "/tmp/camera_image.jpg"  # Only used as fallback
 SECRET_KEY = "your-secret-key-here"
 USERNAME = "admin"
 PASSWORD_HASH = generate_password_hash("your-strong-password")
-# Encryption key (generate once and share with client securely)
-ENCRYPTION_KEY = Fernet.generate_key()  # Run once, then hardcode the key
+ENCRYPTION_KEY = Fernet.generate_key()  # Save this for client
 cipher = Fernet(ENCRYPTION_KEY)
 
-# Initialize camera with lower resolution for speed
+# Initialize camera
 camera = Picamera2()
 camera_config = camera.create_still_configuration(main={"size": (640, 480)})
 camera.configure(camera_config)
@@ -33,7 +31,7 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# Function to capture image directly to memory
+# Function to capture image
 def capture_image():
     try:
         output = io.BytesIO()
@@ -44,16 +42,10 @@ def capture_image():
         print(f"Error capturing image: {str(e)}")
         return None
 
-# Root route for clarity
+# Serve the HTML viewer
 @app.route('/', methods=['GET'])
 def root():
-    return jsonify({
-        "message": "Welcome to the Raspberry Pi Camera Server",
-        "endpoints": {
-            "/get-image": "GET - Retrieve encrypted camera image (requires auth)",
-            "/health": "GET - Check server status"
-        }
-    }), 200
+    return send_from_directory('.', 'viewer.html')
 
 # API endpoint to serve encrypted image
 @app.route('/get-image', methods=['GET'])
@@ -65,7 +57,6 @@ def serve_image():
             abort(500, "Failed to capture image from camera")
         
         encrypted_data = cipher.encrypt(image_data)
-        
         return Response(
             encrypted_data,
             mimetype='application/octet-stream',
@@ -80,15 +71,13 @@ def health_check():
     return {"status": "ok"}, 200
 
 if __name__ == '__main__':
-    # Print encryption key on first run (save it for client)
     print("Encryption Key:", ENCRYPTION_KEY.decode())
-    
     try:
         app.run(
             host='0.0.0.0',
             port=5000,
             threaded=True,
-            debug=False  # Set to True for more detailed logs if needed
+            debug=False
         )
     finally:
         camera.stop()
