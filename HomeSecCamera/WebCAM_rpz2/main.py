@@ -1,22 +1,25 @@
-from flask import Flask, send_file, request, abort
+from flask import Flask, Response, request, abort
 import os
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from picamera2 import Picamera2
+from cryptography.fernet import Fernet
 import io
-from picamera2 import Picamera2  # Updated for latest Raspberry Pi camera support
-import time
 
 app = Flask(__name__)
 
 # Configuration
-TEMP_IMAGE_PATH = "/tmp/camera_image.jpg"  # Temporary storage for captured image
-SECRET_KEY = "your-secret-key-here"       # Replace with a strong secret key
+TEMP_IMAGE_PATH = "/tmp/camera_image.jpg"
+SECRET_KEY = "your-secret-key-here"  # Used for auth, not encryption
 USERNAME = "admin"
-PASSWORD_HASH = generate_password_hash("your-strong-password")  # Replace with your password
+PASSWORD_HASH = generate_password_hash("your-strong-password")
+# Encryption key (generate once and share with client securely)
+ENCRYPTION_KEY = Fernet.generate_key()  # Save this key for client use
+cipher = Fernet(ENCRYPTION_KEY)
 
-# Initialize camera
+# Initialize camera with lower resolution for speed
 camera = Picamera2()
-camera_config = camera.create_still_configuration()
+camera_config = camera.create_still_configuration(main={"size": (640, 480)})  # Lower res for faster capture
 camera.configure(camera_config)
 camera.start()
 
@@ -30,67 +33,52 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# Function to capture fresh image
+# Function to capture image directly to memory (avoid disk I/O)
 def capture_image():
     try:
-        # Capture image to temporary file
-        camera.capture_file(TEMP_IMAGE_PATH)
-        time.sleep(0.1)  # Small delay to ensure file is written
-        return True
+        output = io.BytesIO()
+        camera.capture_file(output, format='jpeg')
+        output.seek(0)
+        return output.read()
     except Exception as e:
         print(f"Error capturing image: {str(e)}")
-        return False
+        return None
 
-# API endpoint to serve the latest camera image
+# API endpoint to serve encrypted image
 @app.route('/get-image', methods=['GET'])
 @require_auth
 def serve_image():
     try:
-        # Capture fresh image
-        if not capture_image():
+        # Capture image directly to memory
+        image_data = capture_image()
+        if image_data is None:
             abort(500, "Failed to capture image from camera")
         
-        if not os.path.exists(TEMP_IMAGE_PATH):
-            abort(404, "Image capture failed")
+        # Encrypt the image data
+        encrypted_data = cipher.encrypt(image_data)
         
-        # Serve the image directly from file
-        return send_file(
-            TEMP_IMAGE_PATH,
-            mimetype='image/jpeg',
-            as_attachment=False
+        # Return as binary response with custom header indicating encryption
+        return Response(
+            encrypted_data,
+            mimetype='application/octet-stream',
+            headers={'X-Encrypted': 'true'}
         )
     except Exception as e:
         abort(500, f"Server error: {str(e)}")
-    finally:
-        # Clean up temporary file
-        if os.path.exists(TEMP_IMAGE_PATH):
-            os.remove(TEMP_IMAGE_PATH)
 
-# Optional: Health check endpoint
+# Health check endpoint (unencrypted for simplicity)
 @app.route('/health', methods=['GET'])
 def health_check():
     return {"status": "ok"}, 200
 
 if __name__ == '__main__':
-    # Ensure tmp directory exists
-    os.makedirs(os.path.dirname(TEMP_IMAGE_PATH), exist_ok=True)
-    
-    # Run with SSL for security
-    ssl_context = ('cert.pem', 'key.pem')  # Replace with your SSL certificates
-    
-    # For development, you can use 'adhoc' SSL context (not for production)
-    # ssl_context = 'adhoc'
-    
+    # No SSL, plain HTTP with encrypted payload
     try:
         app.run(
-            host='0.0.0.0',           # Accessible from any IP
-            port=5000,               # Default port
-            ssl_context=ssl_context, # Enable HTTPS
-            threaded=True,           # Handle multiple requests
-            debug=False              # Set to False in production
+            host='0.0.0.0',
+            port=5000,
+            threaded=True,
+            debug=False
         )
     finally:
-        # Cleanup on shutdown
         camera.stop()
-        if os.path.exists(TEMP_IMAGE_PATH):
-            os.remove(TEMP_IMAGE_PATH)
