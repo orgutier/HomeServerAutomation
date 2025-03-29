@@ -15,8 +15,8 @@ app = Flask(__name__)
 # Initialize the camera
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={"size": (1920, 1080)}, encode="main")
-    camera_config['framerate'] = 60  # Reduce FPS to 15
+    camera_config = camera.create_video_configuration(main=camera.sensor_modes[-1]['size'], encode="main")}, encode="main")
+    camera_config['framerate'] = camera.sensor_modes[-1]['fps']  # Reduce FPS to 15
     camera.configure(camera_config)
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
