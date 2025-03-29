@@ -16,6 +16,7 @@ app = Flask(__name__)
 try:
     camera = Picamera2()
     camera_config = camera.create_video_configuration(main={"size": (1920, 1080)}, encode="main")
+    camera_config['framerate'] = 60  # Reduce FPS to 15
     camera.configure(camera_config)
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
@@ -31,11 +32,10 @@ def generate_frames():
         try:
             # Capture image using hardware acceleration
             frame = camera.capture_array()  # Captures directly as numpy array
-            
-            # Convert to smaller size with better compression
-            resized_frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_AREA)
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 60]  # Compress with JPEG at 60% quality
-            _, jpeg_data = cv2.imencode('.jpg', resized_frame, encode_param)
+
+            # Apply compression without losing wide view
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]  # Compress with JPEG at 40% quality
+            _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
 
             # Yield frame
             yield (b'--frame\r\n'
