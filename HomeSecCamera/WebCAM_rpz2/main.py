@@ -15,7 +15,7 @@ app = Flask(__name__)
 # Initialize the camera
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={"size": (1280, 720)}, encode="main")
+    camera_config = camera.create_video_configuration(main={"size": (1920, 1080)}, encode="main")
     camera.configure(camera_config)
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
