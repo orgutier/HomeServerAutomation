@@ -1,8 +1,10 @@
 from flask import Flask, Response
-from picamera2 import Picamera2
+from picamera2 import Picamera2, MappedArray
 import io
 import time
 import logging
+import numpy as np
+import cv2
 
 # Set up logging for debugging crashes
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,7 +15,7 @@ app = Flask(__name__)
 # Initialize the camera
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={"size": (1920, 1080)}, encode="main")
+    camera_config = camera.create_video_configuration(main={"size": (1280, 720)}, encode="main")
     camera.configure(camera_config)
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
@@ -22,40 +24,33 @@ except Exception as e:
     raise
 
 def generate_frames():
-    """Generate JPEG frames sustainably for indefinite runtime."""
-    stream = io.BytesIO()
     frame_counter = 0
     last_log_time = time.time()
-
+    
     while True:
         try:
-            # Capture directly to JPEG in memory
-            stream.seek(0)
-            camera.capture_file(stream, format='jpeg')  # Hardware-accelerated JPEG
-            jpeg_data = stream.getvalue()
-            frame_size = len(jpeg_data)
+            # Capture image using hardware acceleration
+            frame = camera.capture_array()  # Captures directly as numpy array
+            
+            # Optional: Apply image compression using OpenCV to reduce size
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
 
             # Yield frame
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data + b'\r\n')
-
-            # Reset stream to prevent memory growth
-            stream.seek(0)
-            stream.truncate(0)
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
 
             # Periodic logging to monitor health
             frame_counter += 1
             current_time = time.time()
-            if current_time - last_log_time >= 60:  # Log every minute
-                logger.info(f"Sent {frame_counter} frames, last frame size: {frame_size} bytes")
+            if current_time - last_log_time >= 60:
+                logger.info(f"Sent {frame_counter} frames, average frame size: {len(jpeg_data)} bytes")
                 frame_counter = 0
                 last_log_time = current_time
 
         except Exception as e:
             logger.error(f"Error in frame generation: {e}")
-            # Attempt to recover by restarting capture
-            time.sleep(1)  # Brief pause to avoid tight loop
-            continue
+            time.sleep(1)  # Pause to prevent excessive errors
 
 @app.route('/')
 def index():
@@ -73,7 +68,7 @@ def video_feed():
 if __name__ == '__main__':
     try:
         logger.info("Starting Flask server...")
-        app.run(host='127.0.0.1', port=5000, threaded=True, use_reloader=False)
+        app.run(host='0.0.0.0', port=5000, threaded=True, use_reloader=False)
     except Exception as e:
         logger.error(f"Server crashed: {e}")
     finally:
