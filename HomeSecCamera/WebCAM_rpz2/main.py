@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 camera = Picamera2()
 connected_users = []
+current_mode = None
 
 # Monitor System
-
 
 def get_cpu_temperature():
     try:
@@ -65,7 +65,14 @@ def check_system():
 # Camera Setup
 
 def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
+    global current_mode
+
+    if current_mode == mode:
+        logger.info(f"Camera is already in {mode} mode.")
+        return
+
     try:
+        camera.stop()
         if mode == 'video':
             config = camera.create_video_configuration(main={'size': resolution}, encode='main')
         else:
@@ -74,7 +81,8 @@ def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
         camera.configure(config)
         camera.set_controls({"FrameRate": 50})
         camera.start()
-        logger.info(f"Camera configured for {mode} at {resolution} with {compress}% compression")
+        current_mode = mode
+        logger.info(f"Camera reconfigured to {mode} at {resolution} with {compress}% compression")
     except Exception as e:
         logger.error(f"Failed to configure camera: {e}")
 
@@ -82,15 +90,10 @@ def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
 
 @app.route('/get_video')
 def get_video():
-    if request.headers.get('help'):
-        return jsonify({
-            "description": "Stream video from the camera.",
-            "usage": "/get_video?compress=50&resolution=1920,1080",
-            "params": {
-                "compress": "Compression level (0-100, default: 50)",
-                "resolution": "Resolution as width,height (default: 1920,1080)"
-            }
-        })
+    global current_mode
+    if current_mode == 'photo':
+        return "Cannot start video while photo mode is active. Stop photo mode first.", 400
+
     compress = int(request.args.get('compress', CONFIG['compress']))
     resolution = tuple(map(int, request.args.get('resolution', '1920,1080').split(',')))
     configure_camera('video', compress, resolution)
@@ -107,15 +110,10 @@ def get_video():
 
 @app.route('/get_photo')
 def get_photo():
-    if request.headers.get('help'):
-        return jsonify({
-            "description": "Capture a photo from the camera.",
-            "usage": "/get_photo?compress=100&resolution=max",
-            "params": {
-                "compress": "Compression level (0-100, default: 100)",
-                "resolution": "Resolution as width,height or 'max' (default: max)"
-            }
-        })
+    global current_mode
+    if current_mode == 'video':
+        return "Cannot take photo while video mode is active. Stop video mode first.", 400
+
     compress = int(request.args.get('compress', 100))
     resolution_str = request.args.get('resolution', 'max')
     
