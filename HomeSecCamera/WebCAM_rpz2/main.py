@@ -20,7 +20,9 @@ CONFIG = {
     "host": args.host,
     "port": args.port,
     "compress": 50,
-    "resolution": (1920, 1080)
+    "resolution": (1920, 1080),
+    "max_temp": 85, # Max temperature in Celsius
+    "high_usage_threshold": 90 # CPU or memory usage percentage
 }
 
 # Logging Setup
@@ -47,14 +49,13 @@ def check_system():
     memory_info = psutil.virtual_memory()
     cpu_temp = get_cpu_temperature()
 
-    if cpu_temp and cpu_temp > 80:
-        logger.warning(f"High CPU Temperature: {cpu_temp}°C")
+    if cpu_temp and cpu_temp > CONFIG['max_temp']:
+        logger.error(f"Critical: CPU Temperature exceeded {CONFIG['max_temp']}°C. Stopping camera.")
+        camera.stop()
+        return {"error": "CPU Overheated. Camera has been stopped."}
 
-    if cpu_usage > 90:
-        logger.warning(f"High CPU Usage: {cpu_usage}%")
-
-    if memory_info.percent > 90:
-        logger.warning(f"High Memory Usage: {memory_info.percent}%")
+    if cpu_usage > CONFIG['high_usage_threshold'] or memory_info.percent > CONFIG['high_usage_threshold']:
+        logger.warning(f"High resource usage detected: CPU {cpu_usage}% / Memory {memory_info.percent}%")
 
     return {
         "cpu_usage": cpu_usage,
@@ -79,7 +80,7 @@ def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
             config = camera.create_still_configuration(main={'size': resolution})
         
         camera.configure(config)
-        camera.set_controls({"FrameRate": 50})
+        camera.set_controls({"FrameRate": 30}) # Lower FPS to prevent crashes
         camera.start()
         current_mode = mode
         logger.info(f"Camera reconfigured to {mode} at {resolution} with {compress}% compression")
@@ -93,6 +94,10 @@ def get_video():
     global current_mode
     if current_mode == 'photo':
         return "Cannot start video while photo mode is active. Stop photo mode first.", 400
+
+    system_status = check_system()
+    if 'error' in system_status:
+        return jsonify(system_status), 500
 
     compress = int(request.args.get('compress', CONFIG['compress']))
     resolution = tuple(map(int, request.args.get('resolution', '1920,1080').split(',')))
@@ -113,6 +118,10 @@ def get_photo():
     global current_mode
     if current_mode == 'video':
         return "Cannot take photo while video mode is active. Stop video mode first.", 400
+
+    system_status = check_system()
+    if 'error' in system_status:
+        return jsonify(system_status), 500
 
     compress = int(request.args.get('compress', 100))
     resolution_str = request.args.get('resolution', 'max')
