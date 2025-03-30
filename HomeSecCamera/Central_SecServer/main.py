@@ -14,8 +14,8 @@
 #   sudo apt-get install -y python3-pip libopencv-dev
 #
 # Step 3: Install Python Libraries
-# - Ensure the Hailo Python runtime (hailort) is installed:
-#   pip3 install hailort
+# - Ensure the Hailo Python runtime (hailo_platform) is installed:
+#   pip3 install hailo_platform
 #
 # Step 4: Verify Hailo-8 Detection
 # - Confirm that Hailo-8 is detected using:
@@ -31,7 +31,7 @@
 # Step 2: Verify Device Initialization in the Code
 # - Add error logging to check if the device is accessible:
 #   try:
-#       device = hailort.Device("0000:01:00.0")
+#       device = hailo_platform.Device()
 #       print("Hailo-8 device initialized using hailo_platform.")
 #   except Exception as e:
 #       print(f"Failed to initialize Hailo-8 device: {e}")
@@ -68,20 +68,15 @@ def detect_compute_resource():
     # Check for Hailo-8
     if HAILO_AVAILABLE:
         try:
-            device = hailort.Device("0000:01:00.0")
+            device = hailort.Device()
             print("Hailo-8 device initialized.")
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             print(f"Model loaded: {hef}")
-            vdevice = hailort.VDevice()
-            network_group = vdevice.configure(hef)[0]
-            vstream_info = network_group.get_input_vstream_infos()[0]
-            input_shape = vstream_info.shape
-            infer_context = device.create_infer_context(network_group)
-            input_vstream = infer_context.get_input_vstream(vstream_info.name)
-            output_vstream = infer_context.get_output_vstreams()[0]
+            network_group = device.configure(hef)[0]
+            network_group.activate()
+            print("Hailo-8 network group activated.")
             compute_resource = "Hailo-8"
-            accelerator = (infer_context, input_vstream, output_vstream, input_shape)
-            print("Using Hailo-8 for face detection")
+            accelerator = network_group
         except Exception as e:
             print(f"Hailo-8 setup failed: {e}")
             import traceback
