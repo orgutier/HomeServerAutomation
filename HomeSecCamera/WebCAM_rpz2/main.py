@@ -27,17 +27,17 @@ app = Flask(__name__)
 # sudo apt-get install htop
 # htop
 
-# Initialize the camera
+# Initialize the camera for still image capture at 1 FPS with wide view
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={'size': (1280, 540)}, encode='main')
+    camera_config = camera.create_still_configuration(main={'size': (4608, 2592)})
     camera.configure(camera_config)
 
     # Set frame rate using set_controls
-    camera.set_controls({"FrameRate": 15})
+    camera.set_controls({"FrameRate": 1})
 
     camera.start()
-    logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
+    logger.info(f"Camera started with resolution: {camera_config['main']['size']}")
 except Exception as e:
     logger.error(f"Camera initialization failed: {e}")
     raise
@@ -50,34 +50,25 @@ def check_memory():
     return False
 
 def generate_frames():
-    frame_counter = 0
-    last_log_time = time.time()
-    
     while True:
         try:
-            # Capture image using hardware acceleration
-            frame = camera.capture_array()  # Captures directly as numpy array
+            # Capture image directly into memory
+            frame = camera.capture_array()
 
-            # Compress while maintaining wide view
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]  # 40% Quality
+            # Compress the image to JPEG format in memory
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]  # Adjust quality as needed
             _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
 
-            # Yield frame
+            # Yield the frame to the web client
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
 
-            # Memory check
+            # Check memory usage
             if check_memory():
-                logger.error("High memory usage, reducing frame rate temporarily")
-                camera.set_controls({"FrameRate": 10})
+                logger.warning("High memory usage detected.")
 
-            # Periodic logging to monitor health
-            frame_counter += 1
-            current_time = time.time()
-            if current_time - last_log_time >= 60:
-                logger.info(f"Sent {frame_counter} frames, average frame size: {len(jpeg_data)} bytes")
-                frame_counter = 0
-                last_log_time = current_time
+            # Wait for 1 second before capturing the next frame
+            time.sleep(1)
 
         except Exception as e:
             logger.error(f"Error in frame generation: {e}")
