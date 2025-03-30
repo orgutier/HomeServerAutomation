@@ -75,7 +75,7 @@ def detect_compute_resource():
             vdevice = hailort.VDevice()
             network_group = vdevice.configure(hef)[0]
             vstream_info = network_group.get_input_vstream_infos()[0]
-            input_shape = (vstream_info.shape.height, vstream_info.shape.width, 3)
+            input_shape = vstream_info.shape
             infer_context = device.create_infer_context(network_group)
             input_vstream = infer_context.get_input_vstream(vstream_info.name)
             output_vstream = infer_context.get_output_vstreams()[0]
