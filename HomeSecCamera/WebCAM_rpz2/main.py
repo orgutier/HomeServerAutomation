@@ -1,3 +1,4 @@
+import argparse
 from flask import Flask, Response, request, jsonify
 from picamera2 import Picamera2
 import cv2
@@ -8,10 +9,16 @@ import numpy as np
 import psutil
 import subprocess
 
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Start the Raspberry Pi Camera API server.')
+parser.add_argument('-h', '--host', type=str, default='127.0.0.1', help='Host IP address (default: 127.0.0.1)')
+parser.add_argument('-p', '--port', type=int, default=5000, help='Port number (default: 5000)')
+args = parser.parse_args()
+
 # Configuration
 CONFIG = {
-    "host": "0.0.0.0",
-    "port": 5000,
+    "host": args.host,
+    "port": args.port,
     "compress": 50,
     "resolution": (1920, 1080)
 }
@@ -116,7 +123,7 @@ def get_users():
 
 if __name__ == '__main__':
     try:
-        logger.info("Starting Flask server...")
+        logger.info(f"Starting Flask server on {CONFIG['host']}:{CONFIG['port']}...")
         app.run(host=CONFIG['host'], port=CONFIG['port'], threaded=True, use_reloader=False)
     except Exception as e:
         logger.error(f"Server crashed: {e}")
