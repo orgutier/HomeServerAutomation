@@ -36,40 +36,84 @@
 #   except Exception as e:
 #       print(f"Failed to initialize Hailo-8 device: {e}")
 
-# Verify if the HEF model exists before checking network groups
-import os
-if not os.path.isfile('./centerpose_regnetx_1.6gf_fpn.hef'):
-    raise FileNotFoundError("HEF model file not found at './centerpose_regnetx_1.6gf_fpn.hef'")
-else:
-    print("HEF model file detected.")
+import requests
+import cv2
+import numpy as np
+import time
+import threading
+import queue
 
-# Check if network groups are available
-network_groups = device.loaded_network_groups
-if not network_groups:
-    print("No network groups available. Proceeding without model.")
-else:
-    network_group = network_groups[0]
-    print("Hailo-8 network group loaded.")
+try:
+    import hailo_platform as hailort
+    HAILO_AVAILABLE = True
+except ImportError:
+    HAILO_AVAILABLE = False
 
-print("Hailo-8 setup complete.")
-compute_resource = "Hailo-8"
-accelerator = network_group
+try:
+    from openvino.runtime import Core
+    OPENVINO_AVAILABLE = True
+except ImportError:
+    OPENVINO_AVAILABLE = False
 
-except Exception as e:
-    print(f"Hailo-8 setup failed: {e}")
-    import traceback
-    traceback.print_exc()
-    print("Attempting to get more information using hailortcli...")
-    import subprocess
-    try:
-        result = subprocess.run(['hailortcli', 'scan'], capture_output=True, text=True)
-        print("Hailortcli Scan Output:")
-        print(result.stdout)
-        print(result.stderr)
-    except Exception as cli_error:
-        print(f"Failed to run hailortcli: {cli_error}")
+LOCAL_PORT = 5001  # Your SSH tunnel port
+url = f"http://localhost:{LOCAL_PORT}/video_feed"
 
-return compute_resource, accelerator
+frame_queue = queue.Queue(maxsize=10)
+
+# Detect compute resource
+def detect_compute_resource():
+    compute_resource = "CPU"  # Default fallback
+    accelerator = None
+
+    # Check for Hailo-8
+    if HAILO_AVAILABLE:
+        try:
+            device = hailort.Device()
+            print("Hailo-8 device initialized.")
+            hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
+            print(f"Model loaded: {hef}")
+            
+            # Identify the device to ensure it is connected
+            try:
+                device.control.identify()
+                print("Device identification successful.")
+            except Exception as e:
+                print(f"Device identification failed: {e}")
+
+            # Check if network groups are available
+            # Attempt to load the model
+            print("Attempting to load model to Hailo-8 using control methods...")
+            try:
+                device.control.load_and_start_sensor()
+                print("Model loaded successfully.")
+            except Exception as e:
+                print(f"Failed to load model using control methods: {e}")
+
+            # Check if network groups are available
+            network_groups = device.loaded_network_groups
+            if not network_groups:
+                raise RuntimeError("No network groups available. Please ensure the model is loaded using the appropriate method.")
+            network_group = network_groups[0]
+            print("Hailo-8 network group loaded.")
+            
+            print("Hailo-8 setup complete.")
+            compute_resource = "Hailo-8"
+            accelerator = network_group
+        except Exception as e:
+            print(f"Hailo-8 setup failed: {e}")
+            import traceback
+            traceback.print_exc()
+            print("Attempting to get more information using hailortcli...")
+            import subprocess
+            try:
+                result = subprocess.run(['hailortcli', 'scan'], capture_output=True, text=True)
+                print("Hailortcli Scan Output:")
+                print(result.stdout)
+                print(result.stderr)
+            except Exception as cli_error:
+                print(f"Failed to run hailortcli: {cli_error}")
+
+    return compute_resource, accelerator
 
 # Initialize compute resource
 compute_resource, accelerator = detect_compute_resource()
