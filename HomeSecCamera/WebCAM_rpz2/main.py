@@ -27,17 +27,17 @@ app = Flask(__name__)
 # sudo apt-get install htop
 # htop
 
-# Initialize the camera for still image capture at 1 FPS with wide view
+# Initialize the camera for video capture at 1080p @ 50 FPS with optimized compression
 try:
     camera = Picamera2()
-    camera_config = camera.create_still_configuration(main={'size': (4608, 2592)})
+    camera_config = camera.create_video_configuration(main={'size': (1920, 1080)}, encode='main')
     camera.configure(camera_config)
 
-    # Set frame rate using set_controls
-    camera.set_controls({"FrameRate": 1})
+    # Set frame rate to 50 FPS using set_controls
+    camera.set_controls({"FrameRate": 50})
 
     camera.start()
-    logger.info(f"Camera started with resolution: {camera_config['main']['size']}")
+    logger.info(f"Camera started with resolution: {camera_config['main']['size']} at 50 FPS")
 except Exception as e:
     logger.error(f"Camera initialization failed: {e}")
     raise
@@ -55,11 +55,11 @@ def generate_frames():
             # Capture image directly into memory
             frame = camera.capture_array()
 
-            # Compress the image to JPEG format in memory
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]  # Adjust quality as needed
+            # Apply aggressive compression using JPEG format in memory
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 30]  # High compression at 30% quality
             _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
 
-            # Yield the frame to the web client
+            # Yield the compressed frame to the web client
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
 
@@ -67,12 +67,9 @@ def generate_frames():
             if check_memory():
                 logger.warning("High memory usage detected.")
 
-            # Wait for 1 second before capturing the next frame
-            time.sleep(1)
-
         except Exception as e:
             logger.error(f"Error in frame generation: {e}")
-            time.sleep(1)  # Pause to prevent excessive errors
+            time.sleep(0.02)  # Prevent rapid crash loops and align to 50 FPS
 
 @app.route('/')
 def index():
