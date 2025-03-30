@@ -85,6 +85,17 @@ def detect_compute_resource():
             print(f"Hailo-8 setup failed: {e}")
             import traceback
             traceback.print_exc()
+            print("Attempting to get more information using hailortcli...")
+            import subprocess
+            try:
+                result = subprocess.run(['hailortcli', 'scan'], capture_output=True, text=True)
+                print("Hailortcli Scan Output:")
+                print(result.stdout)
+                print(result.stderr)
+            except Exception as cli_error:
+                print(f"Failed to run hailortcli: {cli_error}")
+            import traceback
+            traceback.print_exc()
 
     return compute_resource, accelerator
 
