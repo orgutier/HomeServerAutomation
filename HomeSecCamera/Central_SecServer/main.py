@@ -1,98 +1,17 @@
-# Hailo-8 Configuration Guide
-# Follow these steps to configure and use the Hailo-8 on your Raspberry Pi:
-#
-# Step 1: Install Hailo SDK
-# - Direct link to download: https://hailo.ai/developer-zone/software-downloads/
-# - Go to https://hailo.ai/ and download the Hailo SDK for Raspberry Pi.
-# - Transfer the downloaded SDK to the Raspberry Pi using scp or a USB drive.
-# - Install the SDK using the following command:
-#   sudo dpkg -i hailo*.deb
-#
-# Step 2: Install Required Packages
-# - Update your package list and install necessary dependencies:
-#   sudo apt-get update
-#   sudo apt-get install -y python3-pip libopencv-dev
-#
-# Step 3: Install Python Libraries
-# - Ensure the Hailo Python runtime (hailo_platform) is installed:
-#   pip3 install hailo_platform
-#
-# Step 4: Verify Hailo-8 Detection
-# - Confirm that Hailo-8 is detected using:
-#   hailortcli scan
-#
-# Troubleshooting Steps
-# If Hailo-8 is not being used and you see the error "Warning: Hailo-8 is not being used. Falling back to CPU.":
-#
-# Step 1: Confirm Device Detection
-# - Ensure the device is detected using:
-#   hailortcli scan
-#
-# Step 2: Verify Device Initialization in the Code
-# - Add error logging to check if the device is accessible:
-#   try:
-#       device = hailo_platform.Device()
-#       print("Hailo-8 device initialized using hailo_platform.")
-#   except Exception as e:
-#       print(f"Failed to initialize Hailo-8 device: {e}")
-
-import requests
-import cv2
-import numpy as np
-import time
-import threading
-import queue
-
-try:
-    import hailo_platform as hailort
-    HAILO_AVAILABLE = True
-except ImportError:
-    HAILO_AVAILABLE = False
-
-try:
-    from openvino.runtime import Core
-    OPENVINO_AVAILABLE = True
-except ImportError:
-    OPENVINO_AVAILABLE = False
-
-LOCAL_PORT = 5001  # Your SSH tunnel port
-url = f"http://localhost:{LOCAL_PORT}/video_feed"
-
-frame_queue = queue.Queue(maxsize=10)
-
-# Detect compute resource
-def detect_compute_resource():
-    compute_resource = "CPU"  # Default fallback
-    accelerator = None
-
-    # Check for Hailo-8
-    if HAILO_AVAILABLE:
-        try:
-            device = hailort.Device()
-            print("Hailo-8 device initialized.")
-            hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
-            print(f"Model loaded: {hef}")
+# Verify if the HEF model exists before checking network groups
+            import os
+            if not os.path.isfile('./centerpose_regnetx_1.6gf_fpn.hef'):
+                raise FileNotFoundError("HEF model file not found at './centerpose_regnetx_1.6gf_fpn.hef'")
+            else:
+                print("HEF model file detected.")
             
-            # Identify the device to ensure it is connected
-            try:
-                device.control.identify()
-                print("Device identification successful.")
-            except Exception as e:
-                print(f"Device identification failed: {e}")
-
-            # Check if network groups are available
-            # Attempt to load the model
-            print("Attempting to load model to Hailo-8 using control methods...")
-            try:
-                device.control.load_and_start_sensor()
-                print("Model loaded successfully.")
-            except Exception as e:
-                print(f"Failed to load model using control methods: {e}")
-
             # Check if network groups are available
             network_groups = device.loaded_network_groups
             if not network_groups:
-                raise RuntimeError("No network groups available. Please ensure the model is loaded using the appropriate method.")
+                print("No network groups available. Proceeding without model.")
+            else:
+                network_group = network_groups[0]
+                print("Hailo-8 network group loaded.")
             network_group = network_groups[0]
             print("Hailo-8 network group loaded.")
             
