@@ -6,6 +6,10 @@ import logging
 import numpy as np
 import cv2
 
+# Optional: Install psutil for memory management
+# sudo apt-get install python3-psutil
+import psutil
+
 # Set up logging for debugging crashes
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,13 +31,23 @@ app = Flask(__name__)
 try:
     camera = Picamera2()
     camera_config = camera.create_video_configuration(main={'size': (1280, 540)}, encode='main')
-    camera_config['framerate'] = 15  # Reduce frame rate to reduce memory loadmin(30, int(camera.sensor_modes[-1]['fps']))  # Limit FPS to prevent memory overflow
     camera.configure(camera_config)
+
+    # Set frame rate using set_controls
+    camera.set_controls({"FrameRate": 15})
+
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
 except Exception as e:
     logger.error(f"Camera initialization failed: {e}")
     raise
+
+def check_memory():
+    memory_info = psutil.virtual_memory()
+    if memory_info.percent > 90:
+        logger.warning(f"High memory usage detected: {memory_info.percent}%")
+        return True
+    return False
 
 def generate_frames():
     frame_counter = 0
@@ -44,13 +58,18 @@ def generate_frames():
             # Capture image using hardware acceleration
             frame = camera.capture_array()  # Captures directly as numpy array
 
-            # Apply compression without losing wide view
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]  # Compress with JPEG at 40% quality
+            # Compress while maintaining wide view
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]  # 40% Quality
             _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
 
             # Yield frame
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
+
+            # Memory check
+            if check_memory():
+                logger.error("High memory usage, reducing frame rate temporarily")
+                camera.set_controls({"FrameRate": 10})
 
             # Periodic logging to monitor health
             frame_counter += 1
