@@ -15,7 +15,7 @@ app = Flask(__name__)
 # Initialize the camera
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main=camera.sensor_modes[-1]['size'], encode="main")}, encode="main")
+    camera_config = camera.create_video_configuration(main=camera.sensor_modes[-1]['size'], encode="main")
     camera_config['framerate'] = camera.sensor_modes[-1]['fps']  # Reduce FPS to 15
     camera.configure(camera_config)
     camera.start()
