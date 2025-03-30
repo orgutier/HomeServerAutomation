@@ -86,7 +86,7 @@ def detect_compute_resource():
     # Check for Hailo-8
     if HAILO_AVAILABLE:
         try:
-            device = hailort.get_default_device()
+            device = hailort.Device("0000:01:00.0")
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             network_group = hef.configure(device)[0]
             vstream_info = network_group.get_input_vstream_infos()[0]
