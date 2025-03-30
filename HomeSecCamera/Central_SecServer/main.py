@@ -32,7 +32,7 @@
 # - Add error logging to check if the device is accessible:
 #   try:
 #       device = hailort.Device("0000:01:00.0")
-#       print("Hailo-8 device initialized.")
+#       print("Hailo-8 device initialized using hailo_platform.")
 #   except Exception as e:
 #       print(f"Failed to initialize Hailo-8 device: {e}")
 
@@ -44,7 +44,7 @@ import threading
 import queue
 
 try:
-    import hailort
+    import hailo_platform as hailort
     HAILO_AVAILABLE = True
 except ImportError:
     HAILO_AVAILABLE = False
