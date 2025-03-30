@@ -83,6 +83,8 @@ def detect_compute_resource():
             print("Using Hailo-8 for face detection")
         except Exception as e:
             print(f"Hailo-8 setup failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     return compute_resource, accelerator
 
@@ -92,6 +94,7 @@ compute_resource, accelerator = detect_compute_resource()
 # Ensure Hailo-8 is used if available
 if compute_resource != "Hailo-8":
     print("Warning: Hailo-8 is not being used. Falling back to CPU.")
+    print("Check error logs above for more information.")
 
 # Stream and display video
 
