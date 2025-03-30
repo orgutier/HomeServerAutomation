@@ -82,6 +82,15 @@ def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
 
 @app.route('/get_video')
 def get_video():
+    if request.headers.get('help'):
+        return jsonify({
+            "description": "Stream video from the camera.",
+            "usage": "/get_video?compress=50&resolution=1920,1080",
+            "params": {
+                "compress": "Compression level (0-100, default: 50)",
+                "resolution": "Resolution as width,height (default: 1920,1080)"
+            }
+        })
     compress = int(request.args.get('compress', CONFIG['compress']))
     resolution = tuple(map(int, request.args.get('resolution', '1920,1080').split(',')))
     configure_camera('video', compress, resolution)
@@ -98,6 +107,15 @@ def get_video():
 
 @app.route('/get_photo')
 def get_photo():
+    if request.headers.get('help'):
+        return jsonify({
+            "description": "Capture a photo from the camera.",
+            "usage": "/get_photo?compress=100&resolution=max",
+            "params": {
+                "compress": "Compression level (0-100, default: 100)",
+                "resolution": "Resolution as width,height or 'max' (default: max)"
+            }
+        })
     compress = int(request.args.get('compress', 100))
     resolution_str = request.args.get('resolution', 'max')
     
