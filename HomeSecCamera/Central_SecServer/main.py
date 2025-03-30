@@ -19,7 +19,7 @@
 #
 # Step 4: Verify Hailo-8 Detection
 # - Confirm that Hailo-8 is detected using:
-#   hailort-cli device-info
+#   hailortcli scan
 # - If hailort-cli is not found, follow these steps:
 #   1. Check if the SDK is installed correctly:
 #      ls /usr/local/bin/hailort-cli
@@ -36,7 +36,7 @@
 #      sudo dpkg -i /path/to/hailo*.deb
 #      sudo apt-get install -f
 # - Confirm that Hailo-8 is detected using:
-#   hailort-cli device-info
+#   hailortcli scan
 # - Ensure it is detected as Hailo-8 and not Hailo-8L, as the Hailo-8 provides higher processing power.
 
 # - Confirm that Hailo-8 is detected using:
@@ -48,7 +48,7 @@
 #
 # Step 6: Update Model Path
 # - Update the path in the code to the correct .hef model file:
-#   hef = hailort.HEF("/path/to/retinaface_mobilnet_v1.hef")
+#   hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
 #
 # Step 7: Run the Operation Server
 # - Run the code using:
@@ -87,7 +87,7 @@ def detect_compute_resource():
     if HAILO_AVAILABLE:
         try:
             device = hailort.get_default_device()
-            hef = hailort.HEF("/path/to/retinaface_mobilnet_v1.hef")
+            hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             network_group = hef.configure(device)[0]
             vstream_info = network_group.get_input_vstream_infos()[0]
             input_shape = (vstream_info.shape.height, vstream_info.shape.width, 3)
