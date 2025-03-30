@@ -11,7 +11,7 @@ import subprocess
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Start the Raspberry Pi Camera API server.')
-parser.add_argument('-h', '--host', type=str, default='127.0.0.1', help='Host IP address (default: 127.0.0.1)')
+parser.add_argument('--host', type=str, default='127.0.0.1', help='Host IP address (default: 127.0.0.1)')
 parser.add_argument('-p', '--port', type=int, default=5000, help='Port number (default: 5000)')
 args = parser.parse_args()
 
