@@ -72,8 +72,14 @@ def detect_compute_resource():
             print("Hailo-8 device initialized.")
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             print(f"Model loaded: {hef}")
-            network_group = device.configure(hef)[0]
-            network_group.activate()
+            # Using loaded_network_groups to access preloaded models
+            network_groups = device.loaded_network_groups
+            if not network_groups:
+                raise RuntimeError("No network groups available on the device. Please ensure the model is loaded.")
+            network_group = network_groups[0]
+            print("Hailo-8 network group loaded.")
+            print("Activating network group...")
+            network_group.control('activate')
             print("Hailo-8 network group activated.")
             compute_resource = "Hailo-8"
             accelerator = network_group
