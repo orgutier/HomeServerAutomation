@@ -12,11 +12,22 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Enable swap memory to prevent memory errors on Raspberry Pi Zero 2
+# sudo dphys-swapfile swapoff
+# sudo nano /etc/dphys-swapfile
+# Set CONF_SWAPSIZE=1024 or higher (e.g., 2048 for 2GB)
+# sudo dphys-swapfile setup
+# sudo dphys-swapfile swapon
+
+# Monitor memory and CPU usage using htop
+# sudo apt-get install htop
+# htop
+
 # Initialize the camera
 try:
     camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={'size': camera.sensor_modes[-1]['size']}, encode="main")
-    camera_config['framerate'] = int(camera.sensor_modes[-1]['fps'])  # Reduce FPS to 15
+    camera_config = camera.create_video_configuration(main={'size': (1280, 540)}, encode='main')
+    camera_config['framerate'] = 15  # Reduce frame rate to reduce memory loadmin(30, int(camera.sensor_modes[-1]['fps']))  # Limit FPS to prevent memory overflow
     camera.configure(camera_config)
     camera.start()
     logger.info(f"Camera started with resolution: {camera.capture_metadata()['ScalerCrop']}")
