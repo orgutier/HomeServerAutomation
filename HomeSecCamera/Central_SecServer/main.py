@@ -73,7 +73,7 @@ def detect_compute_resource():
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             print(f"Model loaded: {hef}")
             vdevice = hailort.VDevice()
-            network_group = vdevice.configure(hef)
+            network_group = vdevice.configure(hef)[0]
             vstream_info = network_group.get_input_vstream_infos()[0]
             input_shape = (vstream_info.shape.height, vstream_info.shape.width, 3)
             infer_context = device.create_infer_context(network_group)
