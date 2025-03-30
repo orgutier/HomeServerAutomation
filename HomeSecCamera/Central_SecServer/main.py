@@ -74,7 +74,19 @@ def detect_compute_resource():
             print(f"Model loaded: {hef}")
             # Load the HEF model onto the device using the control method
             print("Loading model to Hailo-8...")
-            device.control('load_network', str(hef))
+            # Identify the device to ensure it is connected
+            try:
+                device.control.identify()
+                print("Device identification successful.")
+            except Exception as e:
+                print(f"Device identification failed: {e}")
+
+            # Check if network groups are available
+            network_groups = device.loaded_network_groups
+            if not network_groups:
+                raise RuntimeError("Failed to load network group. Ensure the model is valid and compatible with Hailo-8.")
+            network_group = network_groups[0]
+            print("Hailo-8 network group loaded.")
             print("Model loaded to device.")
             
             # Access the network group
