@@ -20,24 +20,6 @@
 # Step 4: Verify Hailo-8 Detection
 # - Confirm that Hailo-8 is detected using:
 #   hailortcli scan
-# - If hailort-cli is not found, follow these steps:
-#   1. Check if the SDK is installed correctly:
-#      ls /usr/local/bin/hailort-cli
-#   2. Ensure the path is available in your environment:
-#      echo $PATH
-#   3. Add it to the path if not present:
-#      export PATH=$PATH:/usr/local/bin
-#   4. To make this permanent, add to ~/.bashrc or ~/.profile:
-#      echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
-#      source ~/.bashrc
-#   5. Check for other commands:
-#      hailo-cli, hailoctl, or hailo --help
-#   6. If none of the above work, reinstall the SDK:
-#      sudo dpkg -i /path/to/hailo*.deb
-#      sudo apt-get install -f
-# - Confirm that Hailo-8 is detected using:
-#   hailortcli scan
-# - Ensure it is detected as Hailo-8 and not Hailo-8L, as the Hailo-8 provides higher processing power.
 #
 # Troubleshooting Steps
 # If Hailo-8 is not being used and you see the error "Warning: Hailo-8 is not being used. Falling back to CPU.":
@@ -53,19 +35,6 @@
 #       print("Hailo-8 device initialized.")
 #   except Exception as e:
 #       print(f"Failed to initialize Hailo-8 device: {e}")
-#
-# Step 3: Confirm Model Initialization
-# - Ensure the model path is correct and the model is detected using:
-#   try:
-#       hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
-#       print(f"Model loaded: {hef}")
-#   except Exception as e:
-#       print(f"Failed to load model: {e}")
-#
-# Step 4: Debug with Detailed Logs
-# - Enable additional logging to capture more details:
-#   import logging
-#   logging.basicConfig(level=logging.DEBUG)
 
 import requests
 import cv2
@@ -123,3 +92,36 @@ compute_resource, accelerator = detect_compute_resource()
 # Ensure Hailo-8 is used if available
 if compute_resource != "Hailo-8":
     print("Warning: Hailo-8 is not being used. Falling back to CPU.")
+
+# Stream and display video
+
+def get_frames():
+    try:
+        response = requests.get(url, stream=True)
+        for chunk in response.iter_content(chunk_size=8192):
+            frame_queue.put(chunk)
+    except Exception as e:
+        print(f"Error in video stream: {e}")
+
+def display_video():
+    buffer = b""
+    while True:
+        try:
+            buffer += frame_queue.get()
+            start = buffer.find(b"\xff\xd8")
+            end = buffer.find(b"\xff\xd9")
+            if start != -1 and end != -1:
+                jpg = buffer[start:end + 2]
+                buffer = buffer[end + 2:]
+                image = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if image is not None:
+                    cv2.putText(image, f"Compute: {compute_resource}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.imshow("Video Stream", image)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        except Exception as e:
+            print(f"Error displaying frame: {e}")
+
+cv2.destroyAllWindows()
+threading.Thread(target=get_frames, daemon=True).start()
+display_video()
