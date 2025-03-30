@@ -72,8 +72,7 @@ def detect_compute_resource():
             print("Hailo-8 device initialized.")
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
             print(f"Model loaded: {hef}")
-            # Load the HEF model onto the device using the control method
-            print("Loading model to Hailo-8...")
+            
             # Identify the device to ensure it is connected
             try:
                 device.control.identify()
@@ -82,23 +81,22 @@ def detect_compute_resource():
                 print(f"Device identification failed: {e}")
 
             # Check if network groups are available
+            # Attempt to load the model
+            print("Attempting to load model to Hailo-8 using control methods...")
+            try:
+                device.control.load_and_start_sensor()
+                print("Model loaded successfully.")
+            except Exception as e:
+                print(f"Failed to load model using control methods: {e}")
+
+            # Check if network groups are available
             network_groups = device.loaded_network_groups
             if not network_groups:
-                raise RuntimeError("Failed to load network group. Ensure the model is valid and compatible with Hailo-8.")
+                raise RuntimeError("No network groups available. Please ensure the model is loaded using the appropriate method.")
             network_group = network_groups[0]
             print("Hailo-8 network group loaded.")
-            print("Model loaded to device.")
             
-            # Access the network group
-            network_groups = device.loaded_network_groups
-            if not network_groups:
-                raise RuntimeError("Failed to load network group. Ensure the model is valid and compatible with Hailo-8.")
-            network_group = network_groups[0]
-            print("Hailo-8 network group loaded.")
-            print("Hailo-8 network group loaded.")
-            print("Activating network group...")
-            network_group.control('activate')
-            print("Hailo-8 network group activated.")
+            print("Hailo-8 setup complete.")
             compute_resource = "Hailo-8"
             accelerator = network_group
         except Exception as e:
@@ -114,8 +112,6 @@ def detect_compute_resource():
                 print(result.stderr)
             except Exception as cli_error:
                 print(f"Failed to run hailortcli: {cli_error}")
-            import traceback
-            traceback.print_exc()
 
     return compute_resource, accelerator
 
