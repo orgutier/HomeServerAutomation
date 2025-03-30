@@ -1,93 +1,123 @@
-from flask import Flask, Response
-from picamera2 import Picamera2, MappedArray
+from flask import Flask, Response, request, jsonify
+from picamera2 import Picamera2
+import cv2
 import io
 import time
 import logging
 import numpy as np
-import cv2
-
-# Optional: Install psutil for memory management
-# sudo apt-get install python3-psutil
 import psutil
+import subprocess
 
-# Set up logging for debugging crashes
+# Configuration
+CONFIG = {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "compress": 50,
+    "resolution": (1920, 1080)
+}
+
+# Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+camera = Picamera2()
+connected_users = []
 
-# Enable swap memory to prevent memory errors on Raspberry Pi Zero 2
-# sudo dphys-swapfile swapoff
-# sudo nano /etc/dphys-swapfile
-# Set CONF_SWAPSIZE=1024 or higher (e.g., 2048 for 2GB)
-# sudo dphys-swapfile setup
-# sudo dphys-swapfile swapon
+# Monitor System
 
-# Monitor memory and CPU usage using htop
-# sudo apt-get install htop
-# htop
 
-# Initialize the camera for video capture at 1080p @ 50 FPS with optimized compression
-try:
-    camera = Picamera2()
-    camera_config = camera.create_video_configuration(main={'size': (1920, 1080)}, encode='main')
-    camera.configure(camera_config)
-
-    # Set frame rate to 50 FPS using set_controls
-    camera.set_controls({"FrameRate": 50})
-
-    camera.start()
-    logger.info(f"Camera started with resolution: {camera_config['main']['size']} at 50 FPS")
-except Exception as e:
-    logger.error(f"Camera initialization failed: {e}")
-    raise
-
-def check_memory():
-    memory_info = psutil.virtual_memory()
-    if memory_info.percent > 90:
-        logger.warning(f"High memory usage detected: {memory_info.percent}%")
-        return True
-    return False
-
-def generate_frames():
-    while True:
-        try:
-            # Capture image directly into memory
-            frame = camera.capture_array()
-
-            # Apply aggressive compression using JPEG format in memory
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 30]  # High compression at 30% quality
-            _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
-
-            # Yield the compressed frame to the web client
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
-
-            # Check memory usage
-            if check_memory():
-                logger.warning("High memory usage detected.")
-
-        except Exception as e:
-            logger.error(f"Error in frame generation: {e}")
-            time.sleep(0.02)  # Prevent rapid crash loops and align to 50 FPS
-
-@app.route('/')
-def index():
-    return "<h1>Camera Stream</h1><img src='/video_feed'>"
-
-@app.route('/video_feed')
-def video_feed():
+def get_cpu_temperature():
     try:
-        return Response(generate_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
+        temp_output = subprocess.check_output(["vcgencmd", "measure_temp"]).decode()
+        return float(temp_output.replace("temp=", "").replace("'C\n", ""))
     except Exception as e:
-        logger.error(f"Video feed error: {e}")
-        return Response(status=500)
+        logger.error(f"Error getting CPU temperature: {e}")
+        return None
+
+def check_system():
+    cpu_usage = psutil.cpu_percent()
+    memory_info = psutil.virtual_memory()
+    cpu_temp = get_cpu_temperature()
+
+    if cpu_temp and cpu_temp > 80:
+        logger.warning(f"High CPU Temperature: {cpu_temp}°C")
+
+    if cpu_usage > 90:
+        logger.warning(f"High CPU Usage: {cpu_usage}%")
+
+    if memory_info.percent > 90:
+        logger.warning(f"High Memory Usage: {memory_info.percent}%")
+
+    return {
+        "cpu_usage": cpu_usage,
+        "memory_usage": memory_info.percent,
+        "cpu_temperature": cpu_temp
+    }
+
+# Camera Setup
+
+def configure_camera(mode='video', compress=50, resolution=(1920, 1080)):
+    try:
+        if mode == 'video':
+            config = camera.create_video_configuration(main={'size': resolution}, encode='main')
+        else:
+            config = camera.create_still_configuration(main={'size': resolution})
+        
+        camera.configure(config)
+        camera.set_controls({"FrameRate": 50})
+        camera.start()
+        logger.info(f"Camera configured for {mode} at {resolution} with {compress}% compression")
+    except Exception as e:
+        logger.error(f"Failed to configure camera: {e}")
+
+# API Endpoints
+
+@app.route('/get_video')
+def get_video():
+    compress = int(request.args.get('compress', CONFIG['compress']))
+    resolution = tuple(map(int, request.args.get('resolution', '1920,1080').split(',')))
+    configure_camera('video', compress, resolution)
+
+    def generate_frames():
+        while True:
+            frame = camera.capture_array()
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), compress]
+            _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + jpeg_data.tobytes() + b'\r\n')
+    
+    connected_users.append(request.remote_addr)
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/get_photo')
+def get_photo():
+    compress = int(request.args.get('compress', 100))
+    resolution_str = request.args.get('resolution', 'max')
+    
+    if resolution_str == 'max':
+        resolution = camera.sensor_modes[0]['size']
+    else:
+        resolution = tuple(map(int, resolution_str.split(',')))
+    
+    configure_camera('photo', compress, resolution)
+    frame = camera.capture_array()
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), compress]
+    _, jpeg_data = cv2.imencode('.jpg', frame, encode_param)
+    return Response(jpeg_data.tobytes(), content_type='image/jpeg')
+
+@app.route('/get_status')
+def get_status():
+    status = check_system()
+    return jsonify(status)
+
+@app.route('/get_users')
+def get_users():
+    return jsonify({"connected_users": connected_users})
 
 if __name__ == '__main__':
     try:
         logger.info("Starting Flask server...")
-        app.run(host='0.0.0.0', port=5000, threaded=True, use_reloader=False)
+        app.run(host=CONFIG['host'], port=CONFIG['port'], threaded=True, use_reloader=False)
     except Exception as e:
         logger.error(f"Server crashed: {e}")
     finally:
