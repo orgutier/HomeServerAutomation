@@ -38,22 +38,35 @@
 # - Confirm that Hailo-8 is detected using:
 #   hailortcli scan
 # - Ensure it is detected as Hailo-8 and not Hailo-8L, as the Hailo-8 provides higher processing power.
+#
+# Troubleshooting Steps
+# If Hailo-8 is not being used and you see the error "Warning: Hailo-8 is not being used. Falling back to CPU.":
+#
+# Step 1: Confirm Device Detection
+# - Ensure the device is detected using:
+#   hailortcli scan
+#
+# Step 2: Verify Device Initialization in the Code
+# - Add error logging to check if the device is accessible:
+#   try:
+#       device = hailort.Device("0000:01:00.0")
+#       print("Hailo-8 device initialized.")
+#   except Exception as e:
+#       print(f"Failed to initialize Hailo-8 device: {e}")
+#
+# Step 3: Confirm Model Initialization
+# - Ensure the model path is correct and the model is detected using:
+#   try:
+#       hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
+#       print(f"Model loaded: {hef}")
+#   except Exception as e:
+#       print(f"Failed to load model: {e}")
+#
+# Step 4: Debug with Detailed Logs
+# - Enable additional logging to capture more details:
+#   import logging
+#   logging.basicConfig(level=logging.DEBUG)
 
-# - Confirm that Hailo-8 is detected using:
-#   hailort-cli device-info
-#
-# Step 5: Install or Convert Models
-# - Download precompiled Hailo models or convert existing ONNX models to .hef format using:
-#   hailo_model_compiler -i model.onnx -o model.hef
-#
-# Step 6: Update Model Path
-# - Update the path in the code to the correct .hef model file:
-#   hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
-#
-# Step 7: Run the Operation Server
-# - Run the code using:
-#   python3 main.py
-#
 import requests
 import cv2
 import numpy as np
@@ -87,7 +100,9 @@ def detect_compute_resource():
     if HAILO_AVAILABLE:
         try:
             device = hailort.Device("0000:01:00.0")
+            print("Hailo-8 device initialized.")
             hef = hailort.HEF("./centerpose_regnetx_1.6gf_fpn.hef")
+            print(f"Model loaded: {hef}")
             network_group = hef.configure(device)[0]
             vstream_info = network_group.get_input_vstream_infos()[0]
             input_shape = (vstream_info.shape.height, vstream_info.shape.width, 3)
